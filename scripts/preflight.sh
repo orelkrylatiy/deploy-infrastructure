@@ -13,12 +13,12 @@ case "${1:-}" in
     REQUIRE_NODE=true
     ;;
   --help)
-    printf 'Usage: sudo bash scripts/preflight.sh [--node-runtime]\\n'
-    printf '  --node-runtime  require Node.js 22+, npm and x86_64 for Node service artifacts\\n'
+    printf 'Usage: sudo bash scripts/preflight.sh [--node-runtime]\n'
+    printf '  --node-runtime  require Node.js 22+, npm and x86_64 for Node service artifacts\n'
     exit 0
     ;;
   *)
-    printf 'Unknown option: %s\\nUsage: sudo bash scripts/preflight.sh [--node-runtime]\\n' "$1" >&2
+    printf 'Unknown option: %s\nUsage: sudo bash scripts/preflight.sh [--node-runtime]\n' "$1" >&2
     exit 2
     ;;
 esac
