@@ -19,6 +19,6 @@ On the first deployment:
 
 On later deployments, existing shared data wins. An incoming file/directory at the same configured path is not allowed to overwrite persistent data.
 
-Use Shared for environment files, user uploads, SQLite files and other runtime state only when the application actually needs them. Ordinary website assets that are versioned with the frontend should stay in the release.
+Use Shared for environment files, user uploads, SQLite files and other runtime state only when the application actually needs them. Static projects are not allowed to configure shared files because files under a web root may be publicly served; a static shared directory is suitable only for intentionally public content such as user-visible uploads. Ordinary website assets that are versioned with the frontend should stay in the release.
 
 Shared is not a backup mechanism. Back up databases and user data independently. For SQLite, stop or quiesce writers or use SQLite's backup facilities before copying a live database.
