@@ -87,12 +87,14 @@ if getent passwd "$DEPLOY_USER" >/dev/null 2>&1; then
       ;;
   esac
   if [[ -n "${deploy_uid:-}" && -e "$deploy_home/.ssh/authorized_keys" ]]; then
+    ssh_dir_owner="$(stat -c '%u' "$deploy_home/.ssh" 2>/dev/null || printf unknown)"
+    ssh_dir_mode="$(stat -c '%a' "$deploy_home/.ssh" 2>/dev/null || printf unknown)"
     key_owner="$(stat -c '%u' "$deploy_home/.ssh/authorized_keys" 2>/dev/null || printf unknown)"
     key_mode="$(stat -c '%a' "$deploy_home/.ssh/authorized_keys" 2>/dev/null || printf unknown)"
-    if [[ "$key_owner" == "$deploy_uid" && "$key_mode" =~ ^[0-7]+$ ]] && (( (8#$key_mode & 077) == 0 )); then
-      ok "Existing authorized_keys ownership and permissions are restrictive"
+    if [[ "$ssh_dir_owner" == "$deploy_uid" && "$ssh_dir_mode" == "700" && "$key_owner" == "$deploy_uid" && "$key_mode" == "600" ]]; then
+      ok "Existing .ssh directory and authorized_keys ownership/permissions are correct"
     else
-      warn "Check ownership and permissions on $deploy_home/.ssh/authorized_keys (expected deploy owner and mode 600)"
+      warn "Set .ssh to deploy-owned mode 700 and authorized_keys to deploy-owned mode 600"
     fi
   else
     warn "No authorized_keys file found for $DEPLOY_USER yet; add the dedicated GitHub Actions public key after installation"
