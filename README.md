@@ -82,10 +82,10 @@ Configure repository Actions variables:
 - `BUILD_DIR` — optional; defaults to `dist` for static artifact.
 - `NODE_VERSION` — optional; defaults to `22` in the Node examples.
 
-The workflow uploads into a unique incoming directory and then runs:
+The workflow builds a unique release ID from the short commit SHA and GitHub run ID, uploads into a unique incoming directory and then runs:
 
 ```bash
-deploy-manager deploy <project-slug> --release-id <git-commit-sha>
+deploy-manager deploy <project-slug> --release-id <unique-release-id>
 ```
 
 ## Useful commands
