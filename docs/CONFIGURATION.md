@@ -88,7 +88,7 @@ The source is copied into a staging workspace, commands are executed there, and 
 - `build_commands`: array of argv arrays; never a shell string.
 - `build_output`: relative output directory for Static + Source; defaults to `dist`.
 - `build_timeout_seconds`: per-command timeout, 30–7200; defaults to 1800.
-- `shared_files`, `shared_dirs`: optional relative paths to persist between releases.
+- `shared_files`, `shared_dirs`: optional relative paths to persist between releases. Static projects cannot configure `shared_files` because they live under a public web root; use static shared directories only for intentionally public content.
 - `service.unit`: required for Service projects; must end in `.service`.
 
 Project names must be lowercase slugs. Shared paths must be relative, must not contain `.` or `..` segments, and must not overlap.
