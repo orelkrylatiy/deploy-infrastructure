@@ -54,8 +54,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$DEPLOY_PROJECT" =~ ^[a-z0-9][a-z0-9-]{0,47}$ ]] || { echo "Invalid DEPLOY_PROJECT"; exit 1; }
-          RELEASE_ID="$GITHUB_SHA"
+          [[ "$DEPLOY_PROJECT" =~ ^[a-z0-9]([a-z0-9-]{0,46}[a-z0-9])?$ ]] || { echo "Invalid DEPLOY_PROJECT"; exit 1; }
+          RELEASE_ID="${GITHUB_SHA:0:12}-${GITHUB_RUN_ID}"
           REMOTE_DIR="/var/lib/deploy-manager/incoming/$DEPLOY_PROJECT/$RELEASE_ID/source"
           ssh deploy-target "mkdir -p '$REMOTE_DIR'"
           rsync -az --delete \
