@@ -12,7 +12,7 @@ INCOMING_ROOT = Path("/var/lib/deploy-manager/incoming")
 LOG_ROOT = Path("/var/log/deploy-manager")
 SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$")
 RELEASE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-UNIT_RE = re.compile(r"^[A-Za-z0-9_.@:-]+\\.service$")
+UNIT_RE = re.compile(r"^[A-Za-z0-9_.@:-]+\.service$")
 
 
 class ConfigError(ValueError):
