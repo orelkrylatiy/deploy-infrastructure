@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from deploy_manager.config import ConfigError, validate_release_id, validate_slug
-from deploy_manager.filesystem import FilesystemError, atomic_symlink, current_release, copy_tree
+from deploy_manager.filesystem import FilesystemError, atomic_symlink, current_release, copy_tree, validate_tree
 
 
 class ValidationTests(unittest.TestCase):
@@ -50,6 +50,28 @@ class FilesystemTests(unittest.TestCase):
             (source / "link").symlink_to(source / "target")
             with self.assertRaises(FilesystemError):
                 copy_tree(source, root / "destination")
+
+    def test_internal_symlink_is_allowed_only_for_service_trees(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            (source / "target").write_text("safe")
+            (source / "link").symlink_to("target")
+            with self.assertRaises(FilesystemError):
+                validate_tree(source)
+            validate_tree(source, allow_internal_symlinks=True)
+
+    def test_external_symlink_is_always_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            outside = root / "outside"
+            outside.write_text("private")
+            source = root / "source"
+            source.mkdir()
+            (source / "link").symlink_to(outside)
+            with self.assertRaises(FilesystemError):
+                validate_tree(source, allow_internal_symlinks=True)
 
     def test_copy_tree_copies_regular_files(self):
         with tempfile.TemporaryDirectory() as temporary:
