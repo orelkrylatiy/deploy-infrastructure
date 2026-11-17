@@ -42,6 +42,17 @@ class ValidationTests(unittest.TestCase):
                 with self.assertRaises(ConfigError):
                     load_config("api")
 
+    def test_static_projects_reject_shared_files(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            config_root = Path(temporary)
+            (config_root / "site.toml").write_text(
+                '[project]\\ntype="static"\\ndelivery="artifact"\\nshared_files=[".env"]\\n',
+                encoding="utf-8",
+            )
+            with patch("deploy_manager.config.CONFIG_ROOT", config_root):
+                with self.assertRaises(ConfigError):
+                    load_config("site")
+
     def test_all_four_example_configs_are_valid_toml(self):
         root = Path(__file__).resolve().parents[1] / "examples" / "project-config"
         for path in root.glob("*.toml"):
@@ -173,6 +184,66 @@ class DeploymentTests(unittest.TestCase):
 
                 self.assertEqual(current_release(config.root), "r1")
                 self.assertEqual((config.root / "current" / "index.html").read_text(), "known good")
+
+    def test_static_source_builds_and_publishes_dist(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            incoming = root / "incoming"
+            source = self._incoming(incoming, "source-1", kind="source")
+            (source / "package.json").write_text("{}")
+            command = (
+                "python3", "-c",
+                "from pathlib import Path; Path('dist').mkdir(); Path('dist/index.html').write_text('built')",
+            )
+            config = self._config(root, delivery="source", commands=(command,))
+            logger = logging.getLogger("test-static-source")
+            logger.addHandler(logging.NullHandler())
+            patches = self._patched_paths(root, incoming)
+            with patches[0], patches[1], patches[2]:
+                deploy(config, "source-1", logger)
+                self.assertEqual((config.root / "current" / "index.html").read_text(), "built")
+
+    def _service_config(self, root, delivery="artifact", commands=()):
+        return ProjectConfig(
+            name="sample", app_type="service", delivery=delivery,
+            root=root / "projects" / "sample", keep_releases=5,
+            healthcheck_url=None, build_commands=commands, build_output="dist",
+            build_timeout=60, shared_files=(), shared_dirs=(),
+            service_unit="sample.service",
+        )
+
+    def test_service_artifact_deploys_with_internal_runtime_symlinks(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            incoming = root / "incoming"
+            payload = self._incoming(incoming, "service-artifact")
+            (payload / "server.js").write_text("console.log('ok')")
+            (payload / "node_modules" / ".bin").mkdir(parents=True)
+            (payload / "node_modules" / "tool.js").write_text("module.exports = true")
+            (payload / "node_modules" / ".bin" / "tool").symlink_to("../tool.js")
+            config = self._service_config(root)
+            logger = logging.getLogger("test-service-artifact")
+            logger.addHandler(logging.NullHandler())
+            patches = self._patched_paths(root, incoming)
+            with patches[0], patches[1], patches[2], patch("deploy_manager.engine._systemctl"):
+                deploy(config, "service-artifact", logger)
+                self.assertEqual(current_release(config.root), "service-artifact")
+                self.assertTrue((config.root / "current" / "server.js").is_file())
+
+    def test_service_source_builds_and_publishes_runtime(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            incoming = root / "incoming"
+            source = self._incoming(incoming, "service-source", kind="source")
+            (source / "package.json").write_text("{}")
+            command = ("python3", "-c", "from pathlib import Path; Path('server.js').write_text('ready')")
+            config = self._service_config(root, delivery="source", commands=(command,))
+            logger = logging.getLogger("test-service-source")
+            logger.addHandler(logging.NullHandler())
+            patches = self._patched_paths(root, incoming)
+            with patches[0], patches[1], patches[2], patch("deploy_manager.engine._systemctl"):
+                deploy(config, "service-source", logger)
+                self.assertTrue((config.root / "current" / "server.js").is_file())
 
     def test_shared_file_survives_later_release(self):
         with tempfile.TemporaryDirectory() as temporary:
