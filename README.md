@@ -28,7 +28,7 @@ sudo bash scripts/preflight.sh  # read-only checks; fix any [FAIL] items first
 sudo bash scripts/install.sh
 ```
 
-The installer creates (if needed) the restricted `deploy` system account and standard directories. It does not configure SSH keys, Nginx, DNS, TLS or application-specific systemd units.
+The installer creates (if needed) the unprivileged `deploy` system account and standard directories. It does not configure SSH keys, Nginx, DNS, TLS or application-specific systemd units.
 
 Append the dedicated GitHub Actions public key to the deploy user's `authorized_keys` using the OpenSSH `restrict` option (for example, `restrict ssh-ed25519 AAAA... github-actions-deploy`). This disables port forwarding, agent forwarding, X11 forwarding and PTY allocation while still allowing the non-interactive SSH commands used by rsync and the deployment workflow. Keep `.ssh` at mode `0700` and `authorized_keys` at `0600`, owned by the deploy user. Do not overwrite other authorized keys.
 
