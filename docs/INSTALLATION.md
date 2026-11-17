@@ -6,18 +6,18 @@
 - Python 3.11 or newer (uses the standard-library `tomllib` module).
 - Git and rsync.
 - SSH access for the dedicated `deploy` user.
-- Node.js/npm on the VPS only for source-mode Node builds.
+- Node.js 22+ and npm on the VPS for Node.js service applications in artifact or source mode.
 
 ## Install the manager
 
 ```bash
 git clone https://github.com/orelkrylatiy/deploy-infrastructure.git
 cd deploy-infrastructure
-sudo bash scripts/preflight.sh  # read-only; fix any [FAIL] items
+sudo bash scripts/preflight.sh --node-runtime  # read-only; checks Node.js 22+ and linux-x64
 sudo bash scripts/install.sh
 ```
 
-The preflight script is read-only: it checks Linux/systemd, Python, Git, rsync, OpenSSH, the deploy account, existing managed paths and available disk space. It does not install packages or change server state.
+The preflight script is read-only: it checks Linux/systemd, Python, Git, rsync, OpenSSH, the deploy account, existing managed paths and available disk space. With `--node-runtime`, it also requires Node.js 22+, npm and the current `linux-x64` target architecture used by the Node runtime artifacts. It does not install packages or change server state.
 
 The installer:
 - checks Python, Git and rsync;
