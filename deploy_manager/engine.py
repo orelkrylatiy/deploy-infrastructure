@@ -63,7 +63,7 @@ def _run_build(config: ProjectConfig, workspace: Path, release_id: str, logger) 
             raise DeployError(f"Build executable not found: {command[0]}") from exc
 
 
-def _apply_shared(config: ProjectConfig, payload: Path) -> None:
+def _apply_shared(config: ProjectConfig, payload: Path, absolute_links: bool = False) -> None:
     shared_root = config.root / "shared"
     for relative in config.shared_files + config.shared_dirs:
         source = payload / relative
@@ -98,7 +98,8 @@ def _apply_shared(config: ProjectConfig, payload: Path) -> None:
             if not shared.is_dir():
                 raise DeployError(f"Configured shared directory is not a directory: {shared}")
         source.parent.mkdir(parents=True, exist_ok=True)
-        source.symlink_to(os.path.relpath(shared, source.parent))
+        link_target = str(shared) if absolute_links else os.path.relpath(shared, source.parent)
+        source.symlink_to(link_target)
 
 
 def _systemctl(config: ProjectConfig, action: str, logger) -> None:
@@ -179,7 +180,7 @@ def _prepare_payload(config: ProjectConfig, release_id: str, staging: Path, logg
         return payload
 
     copy_tree(source, workspace, allow_internal_symlinks=False)
-    _apply_shared(config, workspace)
+    _apply_shared(config, workspace, absolute_links=True)
     _run_build(config, workspace, release_id, logger)
     if config.app_type == "static":
         build_path = (workspace / config.build_output).resolve()
@@ -246,9 +247,9 @@ def deploy(config: ProjectConfig, release_id: str, logger) -> None:
         switched = False
         try:
             payload = _prepare_payload(config, release_id, staging, logger)
-            _apply_shared(config, payload)
-            normalize_permissions(payload)
             os.replace(payload, final_release)
+            _apply_shared(config, final_release)
+            normalize_permissions(final_release)
             _write_metadata(config.root, release_id, {
                 "release_id": release_id, "status": "pending", "started_at": started,
                 "app_type": config.app_type, "delivery": config.delivery,
