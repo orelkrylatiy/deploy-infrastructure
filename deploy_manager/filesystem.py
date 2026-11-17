@@ -6,7 +6,7 @@ import stat
 import uuid
 from pathlib import Path
 
-from .config import INCOMING_ROOT, PROJECTS_ROOT, ProjectConfig, validate_release_id
+from .config import INCOMING_ROOT, PROJECTS_ROOT, ProjectConfig, validate_release_id, validate_slug
 
 
 class FilesystemError(RuntimeError):
@@ -14,11 +14,14 @@ class FilesystemError(RuntimeError):
 
 
 def ensure_project_layout(config: ProjectConfig) -> None:
+    validate_slug(config.name)
     base = PROJECTS_ROOT
     if base.is_symlink():
         raise FilesystemError(f"Projects root must not be a symlink: {base}")
     base.mkdir(parents=True, exist_ok=True)
     root = config.root
+    if root != base / config.name:
+        raise FilesystemError(f"Project root is outside the managed projects directory: {root}")
     if root.is_symlink():
         raise FilesystemError(f"Project root must not be a symlink: {root}")
     if root.exists() and not root.is_dir():
@@ -31,6 +34,7 @@ def ensure_project_layout(config: ProjectConfig) -> None:
 
 
 def incoming_path(project: str, release_id: str, kind: str) -> Path:
+    validate_slug(project)
     validate_release_id(release_id)
     if kind not in {"payload", "source"}:
         raise FilesystemError("Invalid incoming directory kind.")
@@ -50,10 +54,25 @@ def incoming_path(project: str, release_id: str, kind: str) -> Path:
     return path
 
 
-def validate_tree(source: Path, allow_internal_symlinks: bool = False) -> None:
+def validate_tree(
+    source: Path,
+    allow_internal_symlinks: bool = False,
+    allowed_symlink_roots: tuple[Path, ...] = (),
+) -> None:
+    """Validate a deployment tree without following untrusted symlinks.
+
+    Absolute/external symlinks are rejected by default. A caller may explicitly
+    allow links into a trusted persistent directory (for example project/shared)
+    after creating those links itself; uploaded trees never receive that allowlist.
+    """
     if source.is_symlink() or not source.is_dir():
         raise FilesystemError(f"Input must be a real directory: {source}")
     root = source.resolve()
+    allowed_roots = tuple(path.resolve() for path in allowed_symlink_roots)
+
+    def is_within(path: Path, parent: Path) -> bool:
+        return path == parent or parent in path.parents
+
     for current, dirs, files in os.walk(source, followlinks=False):
         current_path = Path(current)
         for name in list(dirs) + files:
@@ -62,10 +81,13 @@ def validate_tree(source: Path, allow_internal_symlinks: bool = False) -> None:
             if stat.S_ISLNK(info.st_mode):
                 if not allow_internal_symlinks:
                     raise FilesystemError(f"Symlinks are not allowed in this input: {item}")
-                if Path(os.readlink(item)).is_absolute():
-                    raise FilesystemError(f"Absolute symlinks are not allowed in this input: {item}")
+                raw_target = Path(os.readlink(item))
                 target = item.resolve()
-                if target != root and root not in target.parents:
+                internal = is_within(target, root)
+                allowed_external = any(is_within(target, allowed) for allowed in allowed_roots)
+                if raw_target.is_absolute() and not allowed_external:
+                    raise FilesystemError(f"Absolute symlinks are not allowed in this input: {item}")
+                if not internal and not allowed_external:
                     raise FilesystemError(f"Symlink escapes the input directory: {item}")
             elif not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)):
                 raise FilesystemError(f"Unsupported special file in input: {item}")

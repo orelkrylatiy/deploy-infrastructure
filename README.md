@@ -82,7 +82,7 @@ Configure repository Actions variables:
 - `BUILD_DIR` — optional; defaults to `dist` for static artifact.
 - `NODE_VERSION` — optional; defaults to `22` in the Node examples.
 
-The workflow builds a unique release ID from the short commit SHA and GitHub run ID, uploads into a unique incoming directory and then runs:
+The workflow builds a unique release ID from the short commit SHA, GitHub run ID and run-attempt number (so rerunning a failed Actions job gets a fresh release), uploads into a unique incoming directory and then runs:
 
 ```bash
 deploy-manager deploy <project-slug> --release-id <unique-release-id>
@@ -107,7 +107,7 @@ deploy-manager logs <project> --lines 200
 - Service systemd units should use `/var/www/projects/<project>/current` as their working directory.
 - Service deployments require narrowly scoped passwordless sudo permissions for the configured systemd unit. See `docs/SERVICE.md`.
 - `shared_files` and `shared_dirs` are optional. They persist across releases; they are not a database backup system.
-- The manager validates uploaded trees and rejects external symlinks. Service artifact bundles may contain symlinks only when their targets remain inside the bundle.
+- The manager validates uploaded trees and rejects untrusted external/absolute symlinks. Service source builds may use the manager-created links into that project's `shared/` directory; no uploaded symlink receives this exception.
 - Source build commands execute as the deploy user. Only deploy trusted repositories and do not put production secrets in the build environment.
 - A rollback restores the previous code release; it does not reverse database schema migrations or external side effects.
 - This is an early 0.x tool. Test it on a disposable VPS/project before using it for production traffic.

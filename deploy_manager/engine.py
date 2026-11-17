@@ -141,7 +141,7 @@ def _healthcheck(config: ProjectConfig, release_path: Path, logger) -> None:
         logger.info("No HTTP healthcheck URL configured; local checks passed.")
         return
     request = urllib.request.Request(
-        config.healthcheck_url, headers={"User-Agent": "deploy-manager/0.1"}
+        config.healthcheck_url, headers={"User-Agent": "deploy-manager/0.2.0"}
     )
     last_error = "unknown error"
     for attempt in range(1, 6):
@@ -199,7 +199,11 @@ def _prepare_payload(config: ProjectConfig, release_id: str, staging: Path, logg
             raise DeployError("Static build output must contain index.html at its root.")
         return payload
 
-    validate_tree(workspace, allow_internal_symlinks=True)
+    validate_tree(
+        workspace,
+        allow_internal_symlinks=True,
+        allowed_symlink_roots=(config.root / "shared",),
+    )
     workspace.rename(payload)
     normalize_permissions(payload)
     return payload
@@ -223,7 +227,11 @@ def _cleanup(config: ProjectConfig, logger) -> None:
         keep.add(current)
     releases_dir = root / "releases"
     for path in releases_dir.iterdir():
-        if not path.is_dir() or path.is_symlink() or path.name.startswith(".staging-"):
+        if path.is_symlink() or not path.is_dir():
+            continue
+        if path.name.startswith(".staging-"):
+            safe_remove(path, releases_dir)
+            logger.info("Removed abandoned staging directory: %s", path.name)
             continue
         if path.name not in keep:
             safe_remove(path, releases_dir)
@@ -231,6 +239,22 @@ def _cleanup(config: ProjectConfig, logger) -> None:
             if metadata.exists():
                 metadata.unlink()
             logger.info("Removed old release: %s", path.name)
+
+
+def _cleanup_incoming(config: ProjectConfig, release_id: str, logger) -> None:
+    base = INCOMING_ROOT
+    project_dir = base / config.name
+    release_dir = project_dir / release_id
+    if base.is_symlink() or project_dir.is_symlink() or release_dir.is_symlink():
+        logger.warning("Refusing to clean incoming path containing a symlink: %s", release_dir)
+        return
+    if release_dir.exists():
+        safe_remove(release_dir, project_dir)
+        logger.info("Removed incoming upload: %s", release_dir)
+    try:
+        project_dir.rmdir()
+    except OSError:
+        pass
 
 
 def init_project(config: ProjectConfig) -> None:
@@ -275,12 +299,6 @@ def deploy(config: ProjectConfig, release_id: str, logger) -> None:
                 _cleanup(config, logger)
             except Exception:
                 logger.exception("Release cleanup failed after successful deployment; active release remains live.")
-            incoming_release = INCOMING_ROOT / config.name / release_id
-            if incoming_release.exists() and not incoming_release.is_symlink():
-                try:
-                    shutil.rmtree(incoming_release)
-                except OSError:
-                    logger.exception("Could not remove completed incoming upload: %s", incoming_release)
         except Exception as exc:
             logger.exception("Deployment failed: %s", exc)
             try:
@@ -301,6 +319,10 @@ def deploy(config: ProjectConfig, release_id: str, logger) -> None:
         finally:
             if staging.exists() and not staging.is_symlink():
                 shutil.rmtree(staging, ignore_errors=True)
+            try:
+                _cleanup_incoming(config, release_id, logger)
+            except Exception:
+                logger.exception("Could not clean incoming upload for release %s", release_id)
 
 
 def rollback(config: ProjectConfig, logger) -> str:
@@ -345,12 +367,19 @@ def status(config: ProjectConfig) -> dict[str, Any]:
     }
     if config.app_type == "service" and config.service_unit:
         systemctl = shutil.which("systemctl")
-        if systemctl:
+        if not systemctl:
+            result["service"] = "systemctl not found"
+        else:
             command = [systemctl, "is-active", config.service_unit]
             if os.geteuid() != 0 and shutil.which("sudo"):
                 command = [shutil.which("sudo"), "-n", *command]
-            proc = subprocess.run(command, capture_output=True, text=True, timeout=15)
-            result["service"] = proc.stdout.strip() or proc.stderr.strip() or "unknown"
+            try:
+                proc = subprocess.run(command, capture_output=True, text=True, timeout=15)
+                result["service"] = proc.stdout.strip() or proc.stderr.strip() or "unknown"
+            except subprocess.TimeoutExpired:
+                result["service"] = "unknown (systemctl timed out)"
+            except OSError as exc:
+                result["service"] = f"unknown ({exc})"
     return result
 
 

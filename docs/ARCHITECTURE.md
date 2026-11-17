@@ -18,14 +18,14 @@ This produces four supported combinations: Static + Artifact, Static + Source, S
 1. A GitHub Actions workflow checks out the repository.
 2. It either prepares an artifact or selects the source tree.
 3. It opens SSH using a pinned/verified known-hosts entry.
-4. rsync uploads the files to a unique incoming path under `/var/lib/deploy-manager/incoming/<project>/<release-id>/`.
+4. rsync uploads the files to a unique incoming path under `/var/lib/deploy-manager/incoming/<project>/<release-id>/`. The release ID includes the GitHub run-attempt number, so a rerun cannot collide with a failed attempt.
 5. The workflow calls `deploy-manager deploy <project> --release-id <release-id>`.
 6. The manager takes a per-project advisory lock, validates the input, prepares a release in a hidden staging directory and applies configured shared paths.
 7. The prepared directory is renamed into `releases/<release-id>`.
 8. The manager atomically replaces the `current` symlink.
 9. For services it restarts the configured systemd unit. It then performs local and optional HTTP health checks.
 10. If a post-switch check fails, the previous symlink is restored and a service is restarted on the old release.
-11. On success, metadata is recorded, old releases are pruned and the incoming upload is removed.
+11. On success, metadata is recorded, old releases are pruned and the incoming upload is removed. Incoming data is also cleaned after a failed attempt; abandoned staging directories left by a hard process interruption are pruned during the next successful deployment.
 
 ## Filesystem layout
 
@@ -64,7 +64,7 @@ A release is immutable after publication. A path listed in `shared_files` or `sh
 
 - Project names and release IDs are validated before they are used in paths.
 - Project roots and incoming paths are constrained to fixed roots.
-- Uploaded symlinks are rejected unless they are internal symlinks in a service artifact/runtime tree.
+- Uploaded symlinks are rejected unless they are relative links that resolve inside a service artifact/runtime tree. During a service source build only, manager-created links into that project's `shared/` directory are explicitly allowlisted; absolute links from the uploaded source remain rejected.
 - Build commands are argv arrays, not shell strings; they run as the unprivileged deploy user.
 - The manager uses per-project `flock` locking.
 - The installer keeps manager code root-owned and project data deploy-owned.
