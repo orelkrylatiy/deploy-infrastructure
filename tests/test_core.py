@@ -115,6 +115,17 @@ class FilesystemTests(unittest.TestCase):
             with self.assertRaises(FilesystemError):
                 validate_tree(source, allow_internal_symlinks=True)
 
+    def test_absolute_internal_symlink_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir()
+            target = source / "target"
+            target.write_text("safe")
+            (source / "link").symlink_to(target)
+            with self.assertRaises(FilesystemError):
+                validate_tree(source, allow_internal_symlinks=True)
+
     def test_copy_tree_copies_regular_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
