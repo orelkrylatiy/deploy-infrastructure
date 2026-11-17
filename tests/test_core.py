@@ -28,15 +28,15 @@ class ValidationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             config_root = Path(temporary)
             (config_root / "api.toml").write_text(
-                '[project]\\ntype="service"\\ndelivery="artifact"\\n'
-                '[service]\\nunit="api.service"\\n',
+                '[project]\ntype="service"\ndelivery="artifact"\n'
+                '[service]\nunit="api.service"\n',
                 encoding="utf-8",
             )
             with patch("deploy_manager.config.CONFIG_ROOT", config_root):
                 self.assertEqual(load_config("api").service_unit, "api.service")
                 (config_root / "api.toml").write_text(
-                    '[project]\\ntype="service"\\ndelivery="artifact"\\n'
-                    '[service]\\nunit="api.sh"\\n',
+                    '[project]\ntype="service"\ndelivery="artifact"\n'
+                    '[service]\nunit="api.sh"\n',
                     encoding="utf-8",
                 )
                 with self.assertRaises(ConfigError):
