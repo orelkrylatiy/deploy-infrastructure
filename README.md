@@ -19,12 +19,12 @@ The manager itself is one program. The selected mode is defined by each project'
 
 ## Install on a VPS
 
-Requirements: Linux with systemd, Python 3.11+, Git and rsync. For source deployments, install the project's build tools (for example Node.js/npm) on the VPS.
+Requirements: Linux with systemd, Python 3.11+, Git and rsync. For Node.js service deployments (artifact or source), install Node.js 22+ and npm on the VPS; source deployments also need the project's build tools.
 
 ```bash
 git clone https://github.com/orelkrylatiy/deploy-infrastructure.git
 cd deploy-infrastructure
-sudo bash scripts/preflight.sh  # read-only checks; fix any [FAIL] items first
+sudo bash scripts/preflight.sh --node-runtime  # read-only; checks Node.js 22+ and linux-x64 too
 sudo bash scripts/install.sh
 ```
 

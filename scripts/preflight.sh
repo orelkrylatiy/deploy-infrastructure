@@ -5,6 +5,23 @@ set -uo pipefail
 INSTALL_DIR="/opt/deploy-manager"
 MANAGER_LINK="/usr/local/bin/deploy-manager"
 DEPLOY_USER="deploy"
+REQUIRE_NODE=false
+case "${1:-}" in
+  "")
+    ;;
+  --node-runtime)
+    REQUIRE_NODE=true
+    ;;
+  --help)
+    printf 'Usage: sudo bash scripts/preflight.sh [--node-runtime]\n'
+    printf '  --node-runtime  require Node.js 22+, npm and x86_64 for Node service artifacts\n'
+    exit 0
+    ;;
+  *)
+    printf 'Unknown option: %s\nUsage: sudo bash scripts/preflight.sh [--node-runtime]\n' "$1" >&2
+    exit 2
+    ;;
+esac
 failures=0
 warnings=0
 
@@ -42,6 +59,48 @@ if command -v python3 >/dev/null 2>&1; then
   else
     fail "Python 3.11+ is required (found ${python_version:-unknown})"
   fi
+fi
+
+architecture="$(uname -m 2>/dev/null || printf unknown)"
+if [[ "$architecture" == "x86_64" ]]; then
+  ok "CPU architecture: $architecture"
+elif [[ "$REQUIRE_NODE" == true ]]; then
+  fail "Node service artifacts are currently built for linux-x64; this VPS reports $architecture"
+else
+  warn "CPU architecture is $architecture; current Node service artifacts target linux-x64"
+fi
+
+if command -v ldd >/dev/null 2>&1; then
+  libc_version="$(ldd --version 2>/dev/null | head -n 1 || true)"
+  [[ -z "$libc_version" ]] || ok "C library: $libc_version"
+fi
+
+node_version=""
+if command -v node >/dev/null 2>&1; then
+  node_version="$(node -p 'process.versions.node' 2>/dev/null || true)"
+  node_major="${node_version%%.*}"
+  if [[ "$node_major" =~ ^[0-9]+$ ]] && (( node_major >= 22 )); then
+    ok "Node.js $node_version (22+)"
+  elif [[ "$REQUIRE_NODE" == true ]]; then
+    fail "Node.js 22+ is required for the configured Next.js service artifacts (found ${node_version:-unknown})"
+  else
+    warn "Node.js 22+ is recommended for the configured Next.js service artifacts (found ${node_version:-unknown})"
+  fi
+else
+  if [[ "$REQUIRE_NODE" == true ]]; then
+    fail "Node.js is missing; install Node.js 22+ for Next.js service artifacts"
+  else
+    warn "Node.js is not installed; required only when deploying Node.js service projects"
+  fi
+fi
+
+if command -v npm >/dev/null 2>&1; then
+  npm_version="$(npm --version 2>/dev/null || true)"
+  ok "npm $npm_version is installed"
+elif [[ "$REQUIRE_NODE" == true ]]; then
+  fail "npm is missing; install it with Node.js 22+"
+else
+  warn "npm is not installed; required only when deploying Node.js service projects"
 fi
 
 if command -v systemctl >/dev/null 2>&1 && systemctl --version >/dev/null 2>&1; then
