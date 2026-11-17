@@ -46,8 +46,14 @@ def _read_metadata(root: Path, release_id: str) -> dict[str, Any] | None:
 
 
 def _run_build(config: ProjectConfig, workspace: Path, release_id: str, logger) -> None:
-    env = os.environ.copy()
-    env.update({"DEPLOY_PROJECT": config.name, "DEPLOY_RELEASE_ID": release_id})
+    env = {
+        "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
+        "HOME": os.environ.get("HOME", "/home/deploy"),
+        "LANG": os.environ.get("LANG", "C.UTF-8"),
+        "CI": "true",
+        "DEPLOY_PROJECT": config.name,
+        "DEPLOY_RELEASE_ID": release_id,
+    }
     for command in config.build_commands:
         logger.info("Running build command: %s", " ".join(command))
         try:
