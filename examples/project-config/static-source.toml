@@ -1,0 +1,10 @@
+[project]
+type = "static"
+delivery = "source"
+keep_releases = 10
+healthcheck_url = "https://www.example.com"
+build_commands = [["npm", "ci"], ["npm", "run", "build"]]
+build_output = "dist"
+build_timeout_seconds = 1800
+shared_files = []
+shared_dirs = []
