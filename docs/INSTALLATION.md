@@ -13,8 +13,11 @@
 ```bash
 git clone https://github.com/orelkrylatiy/deploy-infrastructure.git
 cd deploy-infrastructure
+sudo bash scripts/preflight.sh  # read-only; fix any [FAIL] items
 sudo bash scripts/install.sh
 ```
+
+The preflight script is read-only: it checks Linux/systemd, Python, Git, rsync, OpenSSH, the deploy account, existing managed paths and available disk space. It does not install packages or change server state.
 
 The installer:
 - checks Python, Git and rsync;
@@ -28,18 +31,13 @@ It does **not** create SSH keys, open firewall ports, configure Nginx, issue TLS
 
 ## Configure SSH for GitHub Actions
 
-Create a dedicated key pair outside the repository. The installer creates the deploy user's `.ssh/` directory. Add the public key to:
+Create a dedicated Ed25519 key pair outside the repository. The installer creates the deploy user's `.ssh/` directory. Determine the deploy user's home (the default is `/home/deploy`) and append the public key to `authorized_keys`; do not overwrite other keys. Prefix the key with OpenSSH's `restrict` option:
 
 ```text
-/home/deploy/.ssh/authorized_keys
+restrict ssh-ed25519 AAAA... github-actions-deploy
 ```
 
-Then ensure the key file has the correct ownership and permissions:
-
-```bash
-sudo chown deploy:deploy /home/deploy/.ssh/authorized_keys
-sudo chmod 600 /home/deploy/.ssh/authorized_keys
-```
+`restrict` disables port forwarding, agent forwarding, X11 forwarding and PTY allocation, but still permits the non-interactive remote commands required by the deployment workflow. Ensure `.ssh` is mode `0700` and `authorized_keys` is owned by `deploy` with mode `0600`.
 
 Store the private key in the site's GitHub Actions secret `DEPLOY_SSH_KEY`. Store the VPS host key in `DEPLOY_KNOWN_HOSTS`; obtain and verify the host-key fingerprint through a trusted channel before adding it. Do not trust an unverified scan result.
 
