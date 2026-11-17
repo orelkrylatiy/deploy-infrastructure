@@ -195,6 +195,7 @@ class DeploymentTests(unittest.TestCase):
 
                 self.assertEqual((config.root / "shared" / ".env").read_text(), "SECRET=original")
                 self.assertTrue((config.root / "current" / ".env").is_symlink())
+                self.assertEqual((config.root / "current" / ".env").read_text(), "SECRET=original")
 
 
 if __name__ == "__main__":
