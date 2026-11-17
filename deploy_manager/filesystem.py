@@ -62,6 +62,8 @@ def validate_tree(source: Path, allow_internal_symlinks: bool = False) -> None:
             if stat.S_ISLNK(info.st_mode):
                 if not allow_internal_symlinks:
                     raise FilesystemError(f"Symlinks are not allowed in this input: {item}")
+                if Path(os.readlink(item)).is_absolute():
+                    raise FilesystemError(f"Absolute symlinks are not allowed in this input: {item}")
                 target = item.resolve()
                 if target != root and root not in target.parents:
                     raise FilesystemError(f"Symlink escapes the input directory: {item}")
