@@ -1,0 +1,7 @@
+[project]
+type = "static"
+delivery = "artifact"
+keep_releases = 10
+healthcheck_url = "https://www.example.com"
+shared_files = []
+shared_dirs = []
