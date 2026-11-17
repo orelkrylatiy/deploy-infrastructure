@@ -36,4 +36,4 @@ jobs:
       - name: Validate YAML examples and shell scripts
         run: |
           ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path, aliases: true); puts "valid YAML: #{path}" }' $(find .github/workflows examples -type f -name "*.yml")
-          bash -n scripts/install.sh scripts/update.sh
+          bash -n scripts/preflight.sh scripts/install.sh scripts/update.sh

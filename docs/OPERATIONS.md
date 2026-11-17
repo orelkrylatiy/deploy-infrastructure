@@ -2,9 +2,10 @@
 
 ## Before the first deployment
 
+- [ ] Run `sudo bash scripts/preflight.sh` and resolve all blocking checks.
 - [ ] Install the manager on the VPS.
 - [ ] Confirm Python 3.11+, Git and rsync are installed.
-- [ ] Add the dedicated deploy user's SSH public key.
+- [ ] Add the dedicated deploy user's SSH public key with the OpenSSH `restrict` option and verify file ownership/modes.
 - [ ] Verify the SSH host key and store it in GitHub Actions secrets.
 - [ ] Add a root-owned TOML config for the project.
 - [ ] Run `deploy-manager init <project>`.
