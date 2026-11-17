@@ -90,7 +90,7 @@ Static artifact may additionally use `BUILD_DIR` and `NODE_VERSION`.
 sudo bash /opt/deploy-manager/scripts/update.sh
 ```
 
-The update script fast-forwards the manager's Git checkout and compiles the Python package. It does not alter project releases or project configuration.
+The update script refuses to overwrite local changes, fast-forwards the manager's Git checkout, compiles the package and runs the unit tests. If validation fails, it restores the previous manager commit. It does not alter project releases or project configuration.
 
 ## Uninstall
 
