@@ -115,6 +115,8 @@ def load_config(name: str) -> ProjectConfig:
         raise ConfigError("shared_files and shared_dirs must be arrays.")
     shared_files = tuple(_relative_path(x, "shared_files entry") for x in shared_files_raw)
     shared_dirs = tuple(_relative_path(x, "shared_dirs entry") for x in shared_dirs_raw)
+    if app_type == "static" and shared_files:
+        raise ConfigError("Static sites cannot use shared_files; files under the web root may be publicly served.")
     all_shared = list(shared_files) + list(shared_dirs)
     if set(shared_files) & set(shared_dirs):
         raise ConfigError("A path cannot be both a shared file and a shared directory.")
