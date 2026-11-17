@@ -179,6 +179,7 @@ def _prepare_payload(config: ProjectConfig, release_id: str, staging: Path, logg
         return payload
 
     copy_tree(source, workspace, allow_internal_symlinks=False)
+    _apply_shared(config, workspace)
     _run_build(config, workspace, release_id, logger)
     if config.app_type == "static":
         build_path = (workspace / config.build_output).resolve()
