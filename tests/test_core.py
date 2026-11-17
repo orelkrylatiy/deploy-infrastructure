@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from deploy_manager.config import ConfigError, ProjectConfig, load_config, validate_release_id, validate_slug
 from deploy_manager.engine import DeployError, deploy
-from deploy_manager.filesystem import FilesystemError, atomic_symlink, current_release, copy_tree, validate_tree
+from deploy_manager.filesystem import FilesystemError, atomic_symlink, current_release, copy_tree, incoming_path, validate_tree
 
 
 class ValidationTests(unittest.TestCase):
@@ -52,6 +52,31 @@ class ValidationTests(unittest.TestCase):
             with patch("deploy_manager.config.CONFIG_ROOT", config_root):
                 with self.assertRaises(ConfigError):
                     load_config("site")
+
+    def test_duplicate_shared_paths_are_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            config_root = Path(temporary)
+            (config_root / "site.toml").write_text(
+                '[project]\\ntype="static"\\ndelivery="artifact"\\nshared_dirs=["uploads", "uploads"]\\n',
+                encoding="utf-8",
+            )
+            with patch("deploy_manager.config.CONFIG_ROOT", config_root):
+                with self.assertRaises(ConfigError):
+                    load_config("site")
+
+    def test_healthcheck_url_rejects_credentials_and_invalid_ports(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            config_root = Path(temporary)
+            path = config_root / "api.toml"
+            with patch("deploy_manager.config.CONFIG_ROOT", config_root):
+                for url in ("https://user:pass@example.com/health", "http://localhost:99999/health", "ftp://example.com"):
+                    path.write_text(
+                        '[project]\\ntype="static"\\ndelivery="artifact"\\n'
+                        f'healthcheck_url="{url}"\\n',
+                        encoding="utf-8",
+                    )
+                    with self.subTest(url=url), self.assertRaises(ConfigError):
+                        load_config("api")
 
     def test_all_four_example_configs_are_valid_toml(self):
         root = Path(__file__).resolve().parents[1] / "examples" / "project-config"
@@ -114,6 +139,30 @@ class FilesystemTests(unittest.TestCase):
             (source / "link").symlink_to(outside)
             with self.assertRaises(FilesystemError):
                 validate_tree(source, allow_internal_symlinks=True)
+
+    def test_explicit_shared_root_allows_only_symlinks_into_that_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            shared = root / "shared"
+            source.mkdir()
+            shared.mkdir()
+            (shared / "uploads").mkdir()
+            (shared / "uploads" / "image.png").write_bytes(b"image")
+            (source / "uploads").symlink_to(shared / "uploads")
+            with self.assertRaises(FilesystemError):
+                validate_tree(source, allow_internal_symlinks=True)
+            validate_tree(
+                source,
+                allow_internal_symlinks=True,
+                allowed_symlink_roots=(shared,),
+            )
+
+    def test_incoming_path_rejects_invalid_project_slug(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            with patch("deploy_manager.filesystem.INCOMING_ROOT", Path(temporary)):
+                with self.assertRaises(ConfigError):
+                    incoming_path("../outside", "r1", "payload")
 
     def test_absolute_internal_symlink_is_rejected(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -214,12 +263,12 @@ class DeploymentTests(unittest.TestCase):
                 deploy(config, "source-1", logger)
                 self.assertEqual((config.root / "current" / "index.html").read_text(), "built")
 
-    def _service_config(self, root, delivery="artifact", commands=()):
+    def _service_config(self, root, delivery="artifact", commands=(), shared_files=(), shared_dirs=()):
         return ProjectConfig(
             name="sample", app_type="service", delivery=delivery,
             root=root / "projects" / "sample", keep_releases=5,
             healthcheck_url=None, build_commands=commands, build_output="dist",
-            build_timeout=60, shared_files=(), shared_dirs=(),
+            build_timeout=60, shared_files=shared_files, shared_dirs=shared_dirs,
             service_unit="sample.service",
         )
 
@@ -255,6 +304,71 @@ class DeploymentTests(unittest.TestCase):
             with patches[0], patches[1], patches[2], patch("deploy_manager.engine._systemctl"):
                 deploy(config, "service-source", logger)
                 self.assertTrue((config.root / "current" / "server.js").is_file())
+
+    def test_service_source_supports_shared_files_and_directories(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            incoming = root / "incoming"
+            source = self._incoming(incoming, "service-shared", kind="source")
+            (source / ".env").write_text("SECRET=kept", encoding="utf-8")
+            (source / "uploads").mkdir()
+            (source / "uploads" / "avatar.png").write_bytes(b"avatar")
+            command = (
+                "python3", "-c",
+                "from pathlib import Path; Path('server.js').write_text('ready')",
+            )
+            config = self._service_config(
+                root,
+                delivery="source",
+                commands=(command,),
+                shared_files=(".env",),
+                shared_dirs=("uploads",),
+            )
+            logger = logging.getLogger("test-service-source-shared")
+            logger.addHandler(logging.NullHandler())
+            patches = self._patched_paths(root, incoming)
+            with patches[0], patches[1], patches[2], patch("deploy_manager.engine._systemctl"):
+                deploy(config, "service-shared", logger)
+                current = config.root / "current"
+                self.assertTrue((current / ".env").is_symlink())
+                self.assertTrue((current / "uploads").is_symlink())
+                self.assertEqual((current / ".env").read_text(encoding="utf-8"), "SECRET=kept")
+                self.assertEqual((current / "uploads" / "avatar.png").read_bytes(), b"avatar")
+                self.assertTrue((config.root / "shared" / ".env").is_file())
+
+    def test_abandoned_staging_directory_is_removed_after_success(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            incoming = root / "incoming"
+            config = self._config(root)
+            stale = config.root / "releases" / ".staging-interrupted"
+            stale.mkdir(parents=True)
+            payload = self._incoming(incoming, "r1")
+            (payload / "index.html").write_text("ready", encoding="utf-8")
+            logger = logging.getLogger("test-stale-staging")
+            logger.addHandler(logging.NullHandler())
+            patches = self._patched_paths(root, incoming)
+            with patches[0], patches[1], patches[2]:
+                deploy(config, "r1", logger)
+            self.assertFalse(stale.exists())
+
+    def test_failed_deployment_removes_its_incoming_upload(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            incoming = root / "incoming"
+            config = self._config(root)
+            payload = self._incoming(incoming, "r1")
+            (payload / "index.html").write_text("broken", encoding="utf-8")
+            logger = logging.getLogger("test-failed-upload-cleanup")
+            logger.addHandler(logging.NullHandler())
+            patches = self._patched_paths(root, incoming)
+            with patches[0], patches[1], patches[2], patch(
+                "deploy_manager.engine._healthcheck",
+                side_effect=DeployError("simulated healthcheck failure"),
+            ):
+                with self.assertRaises(DeployError):
+                    deploy(config, "r1", logger)
+            self.assertFalse((incoming / "sample" / "r1").exists())
 
     def test_shared_file_survives_later_release(self):
         with tempfile.TemporaryDirectory() as temporary:

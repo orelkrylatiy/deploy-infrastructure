@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 
 from . import __version__
@@ -61,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
                 parser.error("--lines must be between 1 and 2000")
             print(read_logs(args.project, args.lines))
         return 0
-    except (ConfigError, DeployError, RuntimeError, OSError, ValueError) as exc:
+    except (ConfigError, DeployError, RuntimeError, OSError, ValueError, subprocess.SubprocessError) as exc:
         print(f"deploy-manager: error: {exc}", file=sys.stderr)
         return 1
 

@@ -70,7 +70,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$DEPLOY_PROJECT" =~ ^[a-z0-9]([a-z0-9-]{0,46}[a-z0-9])?$ ]] || { echo "Invalid DEPLOY_PROJECT"; exit 1; }
-          RELEASE_ID="${GITHUB_SHA:0:12}-${GITHUB_RUN_ID}"
+          RELEASE_ID="${GITHUB_SHA:0:12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           REMOTE_DIR="/var/lib/deploy-manager/incoming/$DEPLOY_PROJECT/$RELEASE_ID/payload"
           ssh deploy-target "mkdir -p '$REMOTE_DIR'"
           rsync -az --delete -e "ssh -F $HOME/.ssh/config" "$BUILD_DIR/" "deploy-target:$REMOTE_DIR/"

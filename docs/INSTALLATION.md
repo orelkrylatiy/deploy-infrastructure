@@ -18,6 +18,7 @@ sudo bash scripts/install.sh
 
 The installer:
 - checks Python, Git and rsync;
+- runs the package compile check and unit tests before completing installation;
 - creates the `deploy` system account if absent;
 - clones/updates the manager into `/opt/deploy-manager`;
 - installs the `deploy-manager` command;
@@ -27,16 +28,15 @@ It does **not** create SSH keys, open firewall ports, configure Nginx, issue TLS
 
 ## Configure SSH for GitHub Actions
 
-Create a dedicated key pair outside the repository. Add the public key to:
+Create a dedicated key pair outside the repository. The installer creates the deploy user's `.ssh/` directory. Add the public key to:
 
 ```text
 /home/deploy/.ssh/authorized_keys
 ```
 
-Ensure ownership and permissions:
+Then ensure the key file has the correct ownership and permissions:
 
 ```bash
-sudo install -d -o deploy -g deploy -m 700 /home/deploy/.ssh
 sudo chown deploy:deploy /home/deploy/.ssh/authorized_keys
 sudo chmod 600 /home/deploy/.ssh/authorized_keys
 ```

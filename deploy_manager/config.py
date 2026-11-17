@@ -5,6 +5,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 PROJECTS_ROOT = Path("/var/www/projects")
 CONFIG_ROOT = Path("/etc/deploy-manager/projects")
@@ -98,8 +99,21 @@ def load_config(name: str) -> ProjectConfig:
 
     healthcheck = project.get("healthcheck_url")
     if healthcheck is not None:
-        if not isinstance(healthcheck, str) or not healthcheck.startswith(("http://", "https://")):
-            raise ConfigError("project.healthcheck_url must be an http(s) URL.")
+        if not isinstance(healthcheck, str) or not healthcheck or any(ch.isspace() or ord(ch) < 32 for ch in healthcheck):
+            raise ConfigError("project.healthcheck_url must be a valid http(s) URL.")
+        try:
+            parsed_healthcheck = urlsplit(healthcheck)
+            parsed_healthcheck.port
+        except ValueError as exc:
+            raise ConfigError("project.healthcheck_url is malformed.") from exc
+        if (
+            parsed_healthcheck.scheme not in {"http", "https"}
+            or not parsed_healthcheck.hostname
+            or parsed_healthcheck.username is not None
+            or parsed_healthcheck.password is not None
+            or parsed_healthcheck.fragment
+        ):
+            raise ConfigError("project.healthcheck_url must be an http(s) URL without credentials or fragments.")
 
     commands = _commands(project.get("build_commands", []))
     build_output = _relative_path(project.get("build_output", "dist"), "project.build_output")
@@ -118,6 +132,8 @@ def load_config(name: str) -> ProjectConfig:
     if app_type == "static" and shared_files:
         raise ConfigError("Static sites cannot use shared_files; files under the web root may be publicly served.")
     all_shared = list(shared_files) + list(shared_dirs)
+    if len(set(all_shared)) != len(all_shared):
+        raise ConfigError("Shared paths must be unique.")
     if set(shared_files) & set(shared_dirs):
         raise ConfigError("A path cannot be both a shared file and a shared directory.")
     for item in all_shared:
