@@ -1,0 +1,10 @@
+[project]
+type = "service"
+delivery = "artifact"
+keep_releases = 10
+healthcheck_url = "http://127.0.0.1:3000/health"
+shared_files = [".env"]
+shared_dirs = ["storage", "uploads"]
+
+[service]
+unit = "example-app.service"
