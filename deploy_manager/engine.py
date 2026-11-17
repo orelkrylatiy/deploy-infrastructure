@@ -264,10 +264,16 @@ def deploy(config: ProjectConfig, release_id: str, logger) -> None:
                 "app_type": config.app_type, "delivery": config.delivery,
             })
             logger.info("Deployment succeeded: %s", release_id)
-            _cleanup(config, logger)
+            try:
+                _cleanup(config, logger)
+            except Exception:
+                logger.exception("Release cleanup failed after successful deployment; active release remains live.")
             incoming_release = INCOMING_ROOT / config.name / release_id
             if incoming_release.exists() and not incoming_release.is_symlink():
-                shutil.rmtree(incoming_release)
+                try:
+                    shutil.rmtree(incoming_release)
+                except OSError:
+                    logger.exception("Could not remove completed incoming upload: %s", incoming_release)
         except Exception as exc:
             logger.exception("Deployment failed: %s", exc)
             try:
